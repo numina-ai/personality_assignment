@@ -1,38 +1,38 @@
 from flask import Flask, request, jsonify
-import joblib
+import pickle
 import numpy as np
 
 app = Flask(__name__)
 
-# Load model and scaler
-model = joblib.load('svm_model.pkl')
-scaler = joblib.load('scaler.pkl')
+# Load the trained model (make sure 'svm_model.pkl' is in the same directory)
+model = pickle.load(open('svm_model.pkl', 'rb'))
 
-@app.route('/predict', methods=['POST'])
+# Simple encoding for categorical features
+def preprocess(data):
+    return [
+        data["Time_spent_Alone"],
+        1 if data["Stage_fear"] == "Yes" else 0,
+        data["Social_event_attendance"],
+        data["Going_outside"],
+        1 if data["Drained_after_socializing"] == "Yes" else 0,
+        data["Friends_circle_size"],
+        data["Post_frequency"]
+    ]
+
+@app.route("/")
+def home():
+    return "Personality Predictor API is running."
+
+@app.route("/predict", methods=["POST"])
 def predict():
-    data = request.json
-
-    # Extract and validate input
     try:
-        features = [
-            data['Time_spent_Alone'],
-            int(data['Stage_fear']),
-            data['Social_event_attendance'],
-            data['Going_outside'],
-            int(data['Drained_after_socializing']),
-            data['Friends_circle_size'],
-            data['Post_frequency']
-        ]
-    except KeyError as e:
-        return jsonify({'error': f'Missing feature: {e}'}), 400
+        data = request.get_json()
+        features = preprocess(data)
+        prediction = model.predict([features])[0]
+        result = "Introvert" if prediction == "Introvert" else "Extrovert"
+        return jsonify({"prediction": result})
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
-    # Scale and predict
-    X_input = scaler.transform([features])
-    prediction = model.predict(X_input)[0]
-
-    return jsonify({
-        'prediction': 'Extrovert' if prediction == 1 else 'Introvert'
-    })
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
